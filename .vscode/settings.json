@@ -1,0 +1,40 @@
+{
+	"editor.tabSize": 4,
+	"editor.insertSpaces": false,
+	"files.trimTrailingWhitespace": true,
+	"files.exclude": {
+		".git": true,
+		".build": true,
+		".profile-oss": true,
+		"**/.DS_Store": true,
+		"cli/target": true,
+		"build/**/*.js": {
+			"when": "$(basename).ts"
+		}
+	},
+	"search.exclude": {
+		"**/node_modules": true
+	},
+	"typescript.preferences.quoteStyle": "single",
+	"typescript.format.semicolons": "insert",
+	"javascript.format.semicolons": "insert",
+	"git.branchProtection": [
+		"main",
+		"distro",
+		"release/*"
+	],
+	"[typescript]": {
+		"editor.defaultFormatter": "vscode.typescript-language-features",
+		"editor.formatOnSave": true
+	},
+	"[javascript]": {
+		"editor.defaultFormatter": "vscode.typescript-language-features",
+		"editor.formatOnSave": true
+	},
+	"[json]": {
+		"editor.tabSize": 2,
+		"editor.insertSpaces": true,
+		"editor.defaultFormatter": "vscode.json-language-features",
+		"editor.formatOnSave": true
+	}
+}
