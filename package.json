@@ -4,7 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "vitest"
+    "test": "vitest",
+    "gulp": "node --max-old-space-size=8192 ./node_modules/gulp/bin/gulp.js",
+    "compile": "node --max-old-space-size=8192 ./node_modules/gulp/bin/gulp.js compile"
   },
   "keywords": [],
   "author": "",
@@ -14,7 +16,14 @@
   },
   "devDependencies": {
     "@types/node": "20",
+    "event-stream": "3.3.4",
+    "glob": "^11.0.0",
+    "gulp": "4",
+    "gulp-filter": "^3.0.1",
+    "husky": "^9.1.5",
     "typescript": "^5.5.4",
+    "vinyl": "^3.0.0",
+    "vinyl-fs": "2",
     "vitest": "^2.0.5"
   }
 }

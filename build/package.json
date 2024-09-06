@@ -1,0 +1,10 @@
+{
+  "name": "observable-example-build",
+  "version": "1.0.0",
+  "type": "commonjs",
+  "scripts": {
+    "compile": "../node_modules/.bin/tsc -p tsconfig.build.json",
+    "watch": "../node_modules/.bin/tsc -p tsconfig.build.json --watch",
+    "npmCheckJs": "../node_modules/.bin/tsc --noEmit"
+  }
+}
