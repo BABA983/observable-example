@@ -1,14 +1,43 @@
 import { suite, test } from "vitest";
-import { ObservableValue } from "../base";
 import assert from "assert";
+import { autorun } from '../src/autorun';
+import { ObservableValue } from '../src/observable';
 
 suite("observable", () => {
-  suite("tutorial", () => {
-    test("get + set", () => {
-      const observable = new ObservableValue(0);
-      assert.deepStrictEqual(observable.get(), 0);
-      observable.set(1);
-      assert.deepStrictEqual(observable.get(), 1);
-    });
-  });
+	suite("tutorial", () => {
+		test("get + set", () => {
+			const observable = new ObservableValue(0);
+			assert.deepStrictEqual(observable.get(), 0);
+			observable.set(1);
+			assert.deepStrictEqual(observable.get(), 1);
+			observable.set(2);
+			assert.deepStrictEqual(observable.get(), 2);
+		});
+
+		test("autorun", () => {
+			const log = new Log();
+			const observable = new ObservableValue(0);
+			autorun((reader) => {
+				// log.log(`autorun: ${reader.readObservable(observable)}`);
+				log.log(`autorun: ${observable.read(reader)}`);
+			});
+			assert.deepStrictEqual(log.getAndClearEntries(), ['autorun: 0']);
+			observable.set(1);
+			assert.deepStrictEqual(log.getAndClearEntries(), ['autorun: 1']);
+			observable.set(2);
+			assert.deepStrictEqual(log.getAndClearEntries(), ['autorun: 2']);
+		});
+	});
 });
+
+class Log {
+	private readonly entries: string[] = [];
+	public log(message: string): void {
+		this.entries.push(message);
+	}
+	public getAndClearEntries(): string[] {
+		const entries = [...this.entries];
+		this.entries.length = 0;
+		return entries;
+	}
+};
