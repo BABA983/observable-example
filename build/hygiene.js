@@ -3,7 +3,7 @@ const es = require('event-stream');
 const VinylFile = require('vinyl');
 const path = require('path');
 const fs = require('fs');
-const { all, tsFormattingFilter } = require('./filter');
+const { all, tsFormattingFilter } = require('./filters');
 
 async function runWithLimitedConcurrency(fns, limit = 4) {
 	const results = [];

@@ -1,4 +1,5 @@
-
+const { readFileSync } = require('fs');
+const { join } = require('path');
 
 module.exports.all = [
 	'*',
@@ -28,4 +29,14 @@ module.exports.tsFormattingFilter = [
 	'!extensions/vscode-api-tests/testWorkspace2/**',
 	'!extensions/**/*.test.ts',
 	'!extensions/html-language-features/server/lib/jquery.d.ts',
+];
+
+module.exports.eslintFilter = [
+	'**/*.js',
+	'**/*.ts',
+	...readFileSync(join(__dirname, '../.eslintignore'))
+		.toString().split(/\r\n|\n/)
+		.filter(line => !line.startsWith('#'))
+		.filter(line => !!line)
+		.map(line => line.startsWith('!') ? line.slice(1) : `!${line}`)
 ];

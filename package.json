@@ -6,7 +6,8 @@
   "scripts": {
     "test": "vitest",
     "gulp": "node --max-old-space-size=8192 ./node_modules/gulp/bin/gulp.js",
-    "compile": "node --max-old-space-size=8192 ./node_modules/gulp/bin/gulp.js compile"
+    "compile": "node --max-old-space-size=8192 ./node_modules/gulp/bin/gulp.js compile",
+    "eslint": "node build/eslint"
   },
   "keywords": [],
   "author": "",
@@ -16,9 +17,13 @@
   },
   "devDependencies": {
     "@types/node": "20",
+    "@typescript-eslint/eslint-plugin": "^6.21.0",
+    "@typescript-eslint/parser": "^6.21.0",
+    "eslint": "8.36.0",
     "event-stream": "3.3.4",
     "glob": "^11.0.0",
     "gulp": "4",
+    "gulp-eslint": "^6.0.0",
     "gulp-filter": "^3.0.1",
     "husky": "^9.1.5",
     "typescript": "^5.5.4",
