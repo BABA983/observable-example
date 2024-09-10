@@ -1,4 +1,5 @@
 import { IObservable, IObserver, IReader } from './base';
+import { IDisposable } from './lifecycle';
 
 const enum AutorunState {
 	/**
@@ -8,12 +9,21 @@ const enum AutorunState {
 	upToDate
 }
 
-export class AutorunObserver implements IObserver, IReader {
+export class AutorunObserver implements IObserver, IReader, IDisposable {
 	private _state: AutorunState = AutorunState.stale;
+	private _disposed = false;
 	private _dependencies = new Set<IObservable<any>>();
 
 	constructor(private readonly _runFn: (reader: IReader) => void) {
 		this._runIfNeeded();
+	}
+
+	public dispose() {
+		this._disposed = true;
+		for (const o of this._dependencies) {
+			o.removeObserver(this);
+		}
+		this._dependencies.clear();
 	}
 
 	private _runIfNeeded() {
@@ -21,8 +31,13 @@ export class AutorunObserver implements IObserver, IReader {
 			return;
 		}
 
-		this._state = AutorunState.upToDate;
-		this._runFn(this);
+		try {
+			if (!this._disposed) {
+				this._state = AutorunState.upToDate;
+				this._runFn(this);
+			}
+		} finally {
+		}
 	}
 
 	handleChange<T>(observable: IObservable<T>): void {
