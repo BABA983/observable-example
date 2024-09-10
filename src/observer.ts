@@ -3,9 +3,14 @@ import { IDisposable } from './lifecycle';
 
 const enum AutorunState {
 	/**
+	 * A dependency could have changed.
+	 * We need to explicitly ask them if at least one dependency changed.
+	 */
+	dependenciesMightHaveChanged = 1,
+	/**
 	 * A dependency changed and we need to recompute.
 	 */
-	stale = 1,
+	stale,
 	upToDate
 }
 
@@ -40,10 +45,25 @@ export class AutorunObserver implements IObserver, IReader, IDisposable {
 		}
 	}
 
+	beginUpdate(): void {
+		if (this._state === AutorunState.upToDate) {
+			this._state = AutorunState.dependenciesMightHaveChanged;
+		}
+	}
+
+	endUpdate(): void {
+		do {
+			if (this._state === AutorunState.dependenciesMightHaveChanged) {
+				this._state = AutorunState.upToDate;
+			}
+
+			this._runIfNeeded();
+		} while (this._state !== AutorunState.upToDate);
+	}
+
 	handleChange<T>(observable: IObservable<T>): void {
 		if (this._dependencies.has(observable)) {
 			this._state = AutorunState.stale;
-			this._runIfNeeded();
 		}
 	}
 

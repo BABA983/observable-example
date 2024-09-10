@@ -1,6 +1,6 @@
-import { IObservable, IObserver, IReader } from './base';
+import { IObservable, IObserver, IReader, ISettableObservable, ITransaction, TransactionImpl } from './base';
 
-abstract class BaseObservable<T> implements IObservable<T> {
+export abstract class BaseObservable<T> implements IObservable<T> {
 	protected readonly observers = new Set<IObserver>();
 
 	abstract get(): T;
@@ -19,7 +19,7 @@ abstract class BaseObservable<T> implements IObservable<T> {
 		return reader ? reader.readObservable(this) : this.get();
 	}
 }
-export class ObservableValue<T> extends BaseObservable<T> implements IObservable<T> {
+export class ObservableValue<T> extends BaseObservable<T> implements ISettableObservable<T> {
 	protected _value: T;
 
 	constructor(initialValue: T) {
@@ -31,14 +31,26 @@ export class ObservableValue<T> extends BaseObservable<T> implements IObservable
 		return this._value;
 	}
 
-	set(value: T): void {
+	set(value: T, tx?: ITransaction): void {
 		// TODO: check if value is different
-		const oldValue = this._value;
-		this._setValue(value);
-		// log
-		for (const observer of this.observers) {
-			observer.handleChange(this);
+		let _tx: TransactionImpl | undefined;
+		if (!tx) {
+			tx = _tx = new TransactionImpl(() => { });
 		}
+		try {
+			const oldValue = this._value;
+			this._setValue(value);
+			// log
+			for (const observer of this.observers) {
+				tx.updateObserver(observer, this);
+				observer.handleChange(this);
+			}
+		} finally {
+			if (_tx) {
+				_tx.finish();
+			}
+		}
+
 	}
 
 	private _setValue(newValue: T): void {
