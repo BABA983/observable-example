@@ -6,3 +6,11 @@ export function getFunctionName(fn: Function): string | undefined {
 	const result = match ? match[1] : undefined;
 	return result?.trim();
 }
+
+export function getClassName(obj: object): string {
+	const ctor = obj.constructor;
+	if (ctor) {
+		return ctor.name;
+	}
+	return 'Object';
+}

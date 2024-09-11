@@ -1,3 +1,4 @@
+import { getLogger } from './logger';
 import { getFunctionName } from './util';
 
 /**
@@ -6,6 +7,11 @@ import { getFunctionName } from './util';
  * @template T The type of the values the observable can hold.
  */
 export interface IObservable<T> {
+	/**
+	 * A human-readable name for debugging purposes.
+	 */
+	readonly debugName: string;
+
 	/**
 	 * Returns the current value.
 	 */
@@ -39,7 +45,7 @@ export interface ISettable<T> {
 	 * @param value The new value
 	 * @param tx The transaction that is currently running
 	 */
-	set(value: T, tx: ITransaction): void;
+	set(value: T, tx: ITransaction | undefined): void;
 }
 
 export interface ISettableObservable<T> extends IObservable<T>, ISettable<T> { }
@@ -99,7 +105,9 @@ export function transaction(fn: (tx: ITransaction) => void, getDebugName?: () =>
 export class TransactionImpl implements ITransaction {
 	private updatingObservers: { observer: IObserver; observable: IObservable<any>; }[] | null = [];
 
-	constructor(public readonly _fn: Function, public readonly _getDebugName?: () => string) { }
+	constructor(public readonly _fn: Function, public readonly _getDebugName?: () => string) {
+		getLogger()?.handleBeginTransaction(this);
+	}
 
 	public getDebugName() {
 		if (this._getDebugName) {
@@ -122,5 +130,6 @@ export class TransactionImpl implements ITransaction {
 		}
 		// Prevent anyone from updating observers from now on.
 		this.updatingObservers = null;
+		getLogger()?.handleEndTransaction();
 	}
 }

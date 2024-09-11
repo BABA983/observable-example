@@ -1,25 +1,33 @@
 import { IObservable, IObserver, IReader } from './base';
+import { DebugNameData } from './debug';
 import { IDisposable } from './lifecycle';
+import { getLogger } from './logger';
 
-const enum AutorunState {
+enum AutorunState {
 	/**
 	 * A dependency could have changed.
 	 * We need to explicitly ask them if at least one dependency changed.
 	 */
-	dependenciesMightHaveChanged = 1,
+	dependenciesMightHaveChanged = 'DEPENDENCIES_MIGHT_HAVE_CHANGED',
 	/**
 	 * A dependency changed and we need to recompute.
 	 */
-	stale,
-	upToDate
+	stale = 'STALE',
+	upToDate = 'UP_TO_DATE',
 }
 
 export class AutorunObserver implements IObserver, IReader, IDisposable {
 	private _state: AutorunState = AutorunState.stale;
 	private _disposed = false;
 	private _dependencies = new Set<IObservable<any>>();
+	private _dependenciesToBeRemoved = new Set<IObservable<any>>();
 
-	constructor(private readonly _runFn: (reader: IReader) => void) {
+	public get debugName(): string {
+		return this._debugNameData.getDebugName(this) ?? '(anonymous)';
+	}
+
+	constructor(public readonly _debugNameData: DebugNameData, public readonly _runFn: (reader: IReader) => void) {
+		getLogger()?.handleAutorunCreated(this);
 		this._runIfNeeded();
 	}
 
@@ -36,13 +44,31 @@ export class AutorunObserver implements IObserver, IReader, IDisposable {
 			return;
 		}
 
+		const emptySet = this._dependenciesToBeRemoved;
+		this._dependenciesToBeRemoved = this._dependencies;
+		this._dependencies = emptySet;
+
+		this._state = AutorunState.upToDate;
 		try {
 			if (!this._disposed) {
-				this._state = AutorunState.upToDate;
+				getLogger()?.handleAutorunTriggered(this);
 				this._runFn(this);
 			}
 		} finally {
+			if (!this._disposed) {
+				getLogger()?.handleAutorunFinished(this);
+			}
+			// We don't want our observed observables to think that they are (not even temporarily) not being observed.
+			// Thus, we only unsubscribe from observables that are definitely not read anymore.
+			for (const o of this._dependenciesToBeRemoved) {
+				o.removeObserver(this);
+			}
+			this._dependenciesToBeRemoved.clear();
 		}
+	}
+
+	public toString() {
+		return `Autorun<${this.debugName}>`;
 	}
 
 	beginUpdate(): void {
@@ -52,13 +78,17 @@ export class AutorunObserver implements IObserver, IReader, IDisposable {
 	}
 
 	endUpdate(): void {
-		do {
-			if (this._state === AutorunState.dependenciesMightHaveChanged) {
-				this._state = AutorunState.upToDate;
-			}
+		try {
+			do {
+				if (this._state === AutorunState.dependenciesMightHaveChanged) {
+					this._state = AutorunState.upToDate;
+				}
 
-			this._runIfNeeded();
-		} while (this._state !== AutorunState.upToDate);
+				this._runIfNeeded();
+			} while (this._state !== AutorunState.upToDate);
+		} finally {
+		}
+
 	}
 
 	handleChange<T>(observable: IObservable<T>): void {
@@ -68,9 +98,16 @@ export class AutorunObserver implements IObserver, IReader, IDisposable {
 	}
 
 	readObservable<T>(observable: IObservable<T>): T {
-		this._dependencies.add(observable);
 		observable.addObserver(this);
+		/**
+		 * This might call {@link handleChange} indirectly, which could invalidate us.
+		 * We need to get the value before adding the observable to our dependencies.
+		 * If the observable were added to dependencies could lead to unintended side effects.
+		 * {@link _state} might mark as stale, which would cause the autorun to re-run.
+		 */
 		const value = observable.get();
+		this._dependencies.add(observable);
+		this._dependenciesToBeRemoved.delete(observable);
 		return value;
 	}
 }
