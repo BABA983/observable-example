@@ -49,7 +49,7 @@ suite("observable", () => {
 			assert.deepStrictEqual(log.getAndClearEntries(), ['autorun: 3']);
 		});
 
-		test.only('derived + autorun', () => {
+		test('derived + autorun', () => {
 			const log = new Log();
 			const observable1 = observableValue('observable1', 0);
 			const observable2 = observableValue('observable2', 0);
@@ -108,6 +108,48 @@ suite("observable", () => {
 
 			assert.deepStrictEqual(log.getAndClearEntries(), [
 				"derived.recompute: 6 + 4 = 10",
+			]);
+		});
+
+		test.only('read during transaction', () => {
+			const log = new Log();
+			const observable1 = observableValue('myObservable1', 0);
+			const observable2 = observableValue('myObservable2', 0);
+
+			const myDerived = derived(() => 'myDerived', (reader) => {
+				const value1 = observable1.read(reader);
+				const value2 = observable2.read(reader);
+				const sum = value1 + value2;
+				log.log(`myDerived.recompute: ${value1} + ${value2} = ${sum}`);
+				return sum;
+			});
+
+			autorun(() => 'myAutorun', reader => {
+				log.log(`myAutorun(myDerived: ${myDerived.read(reader)})`);
+			});
+			// autorun runs immediately
+			assert.deepStrictEqual(log.getAndClearEntries(), [
+				"myDerived.recompute: 0 + 0 = 0",
+				"myAutorun(myDerived: 0)",
+			]);
+
+			transaction((tx) => {
+				observable1.set(-10, tx);
+				assert.deepStrictEqual(log.getAndClearEntries(), []);
+
+				myDerived.get(); // This forces a (sync) recomputation of the current value!
+				assert.deepStrictEqual(log.getAndClearEntries(), (["myDerived.recompute: -10 + 0 = -10"]));
+				// This means, that even in transactions you can assume that all values you can read with `get` and `read` are up-to-date.
+				// Read these values just might cause additional (potentially unneeded) recomputations.
+
+				observable2.set(10, tx);
+				assert.deepStrictEqual(log.getAndClearEntries(), []);
+			});
+
+			// This autorun runs again, because its dependency changed from 0 to -10 and then back to 0.
+			assert.deepStrictEqual(log.getAndClearEntries(), [
+				"myDerived.recompute: -10 + 10 = 0",
+				"myAutorun(myDerived: 0)",
 			]);
 		});
 	});
