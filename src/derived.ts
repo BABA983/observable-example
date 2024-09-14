@@ -43,7 +43,26 @@ export class Derived<T> extends BaseObservable<T> implements IReader, IObserver 
 		this._equalityComparator = (a: T, b: T) => a === b;
 	}
 
+	protected override onLastObserverRemoved(): void {
+		/**
+		 * We are not tracking changes anymore, thus we have to assume
+		 * that our cache is invalid.
+		 */
+		this._state = DerivedState.init;
+		this._value = undefined;
+		for (const d of this._dependencies) {
+			d.removeObserver(this);
+		}
+		this._dependencies.clear();
+	}
+
 	override get(): T {
+		if (this.observers.size === 0) {
+			const value = this._computeFn(this);
+			// Clear new dependencies
+			this.onLastObserverRemoved();
+			return value;
+		}
 		do {
 			// We might not get a notification for a dependency that changed while it is updating,
 			// thus we also have to ask all our depedencies if they changed in this case.

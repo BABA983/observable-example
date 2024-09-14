@@ -13,11 +13,21 @@ export abstract class BaseObservable<T> implements IObservable<T> {
 	}
 
 	public addObserver(observer: IObserver): void {
+		const len = this.observers.size;
 		this.observers.add(observer);
+		if (len === 0) {
+			this.onFirstObserverAdded();
+		}
 	}
 	public removeObserver(observer: IObserver): void {
-		this.observers.delete(observer);
+		const deleted = this.observers.delete(observer);
+		if (deleted && this.observers.size === 0) {
+			this.onLastObserverRemoved();
+		}
 	}
+
+	protected onFirstObserverAdded(): void { }
+	protected onLastObserverRemoved(): void { }
 
 	/** @sealed */
 	public read(reader: IReader | undefined): T {

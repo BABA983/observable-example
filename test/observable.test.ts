@@ -5,6 +5,7 @@ import { observableValue } from '../src/observable';
 import { transaction } from '../src/base';
 import { derived } from '../src/derived';
 import { ConsoleObservableLogger, setLogger } from '../src/logger';
+import { keepObserved } from '../src/keepObserved';
 
 
 setLogger(new ConsoleObservableLogger());
@@ -111,7 +112,7 @@ suite("observable", () => {
 			]);
 		});
 
-		test.only('read during transaction', () => {
+		test('read during transaction', () => {
 			const log = new Log();
 			const observable1 = observableValue('myObservable1', 0);
 			const observable2 = observableValue('myObservable2', 0);
@@ -151,6 +152,125 @@ suite("observable", () => {
 				"myDerived.recompute: -10 + 10 = 0",
 				"myAutorun(myDerived: 0)",
 			]);
+		});
+
+		test.only('get without observers', () => {
+			const log = new Log();
+			const observable1 = observableValue('myObservableValue1', 0);
+
+			// We set up some computeds.
+			const computed1 = derived(() => 'computed1', (reader) => {
+				const value1 = observable1.read(reader);
+				const result = value1 % 3;
+				log.log(`recompute1: ${value1} % 3 = ${result}`);
+				return result;
+			});
+			const computed2 = derived(() => 'computed2', (reader) => {
+				const value1 = computed1.read(reader);
+				const result = value1 * 2;
+				log.log(`recompute2: ${value1} * 2 = ${result}`);
+				return result;
+			});
+			const computed3 = derived(() => 'computed3', (reader) => {
+				const value1 = computed1.read(reader);
+				const result = value1 * 3;
+				log.log(`recompute3: ${value1} * 3 = ${result}`);
+				return result;
+			});
+			const computedSum = derived(() => 'computedSum', (reader) => {
+				const value1 = computed2.read(reader);
+				const value2 = computed3.read(reader);
+				const result = value1 + value2;
+				log.log(`recompute4: ${value1} + ${value2} = ${result}`);
+				return result;
+			});
+
+			assert.deepStrictEqual(log.getAndClearEntries(), []);
+
+			observable1.set(1, undefined);
+			assert.deepStrictEqual(log.getAndClearEntries(), []);
+
+			// And now read the computed that dependens on all the others.
+			log.log(`value: ${computedSum.get()}`);
+			assert.deepStrictEqual(log.getAndClearEntries(), [
+				'recompute1: 1 % 3 = 1',
+				'recompute2: 1 * 2 = 2',
+				'recompute3: 1 * 3 = 3',
+				'recompute4: 2 + 3 = 5',
+				'value: 5',
+			]);
+
+			log.log(`value: ${computedSum.get()}`);
+			// Because there are no observers, the derived values are not cached (!), but computed from scratch.
+			assert.deepStrictEqual(log.getAndClearEntries(), [
+				'recompute1: 1 % 3 = 1',
+				'recompute2: 1 * 2 = 2',
+				'recompute3: 1 * 3 = 3',
+				'recompute4: 2 + 3 = 5',
+				'value: 5',
+			]);
+
+			const disposable = keepObserved(computedSum); // Use keepObserved to keep the cache.
+			// You can also use `computedSum.keepObserved(store)` for an inline experience.
+			log.log(`value: ${computedSum.get()}`);
+			assert.deepStrictEqual(log.getAndClearEntries(), [
+				'recompute1: 1 % 3 = 1',
+				'recompute2: 1 * 2 = 2',
+				'recompute3: 1 * 3 = 3',
+				'recompute4: 2 + 3 = 5',
+				'value: 5',
+			]);
+
+			log.log(`value: ${computedSum.get()}`);
+			assert.deepStrictEqual(log.getAndClearEntries(), [
+				'value: 5',
+			]);
+
+			observable1.set(2, undefined);
+			// The keepObserved does not force deriveds to be recomputed! They are still lazy.
+			assert.deepStrictEqual(log.getAndClearEntries(), ([]));
+
+
+			log.log(`value: ${computedSum.get()}`);
+			// Those deriveds are recomputed on demand, i.e. when someone reads them.
+			assert.deepStrictEqual(log.getAndClearEntries(), [
+				"recompute1: 2 % 3 = 2",
+				"recompute2: 2 * 2 = 4",
+				"recompute3: 2 * 3 = 6",
+				"recompute4: 4 + 6 = 10",
+				"value: 10",
+			]);
+
+			log.log(`value: ${computedSum.get()}`);
+			// ... and then cached again
+			assert.deepStrictEqual(log.getAndClearEntries(), (["value: 10"]));
+
+			disposable.dispose();
+
+			log.log(`value: ${computedSum.get()}`);
+			// Which disables the cache again
+			assert.deepStrictEqual(log.getAndClearEntries(), [
+				"recompute1: 2 % 3 = 2",
+				"recompute2: 2 * 2 = 4",
+				"recompute3: 2 * 3 = 6",
+				"recompute4: 4 + 6 = 10",
+				"value: 10",
+			]);
+
+			log.log(`value: ${computedSum.get()}`);
+			assert.deepStrictEqual(log.getAndClearEntries(), [
+				"recompute1: 2 % 3 = 2",
+				"recompute2: 2 * 2 = 4",
+				"recompute3: 2 * 3 = 6",
+				"recompute4: 4 + 6 = 10",
+				"value: 10",
+			]);
+
+			// Why don't we just always keep the cache alive?
+			// This is because in order to keep the cache alive, we have to keep our subscriptions to our dependencies alive,
+			// which could cause memory-leaks.
+			// So instead, when the last observer of a derived is disposed, we dispose our subscriptions to our dependencies.
+			// `keepObserved` just prevents this from happening.
 		});
 	});
 });
