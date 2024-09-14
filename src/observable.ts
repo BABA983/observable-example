@@ -8,6 +8,10 @@ export abstract class BaseObservable<T> implements IObservable<T> {
 
 	abstract get(): T;
 
+	reportChanges(): void {
+		this.get();
+	}
+
 	public addObserver(observer: IObserver): void {
 		this.observers.add(observer);
 	}

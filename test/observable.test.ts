@@ -98,7 +98,17 @@ suite("observable", () => {
 				"autorun: (derived: 10)",
 			]);
 
+			transaction((tx) => {
+				observable1.set(6, tx);
+				assert.deepStrictEqual(log.getAndClearEntries(), []);
 
+				observable2.set(4, tx);
+				assert.deepStrictEqual(log.getAndClearEntries(), []);
+			});
+
+			assert.deepStrictEqual(log.getAndClearEntries(), [
+				"derived.recompute: 6 + 4 = 10",
+			]);
 		});
 	});
 });

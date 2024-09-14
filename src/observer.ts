@@ -82,6 +82,13 @@ export class AutorunObserver implements IObserver, IReader, IDisposable {
 			do {
 				if (this._state === AutorunState.dependenciesMightHaveChanged) {
 					this._state = AutorunState.upToDate;
+					for (const d of this._dependencies) {
+						d.reportChanges();
+						if (this._state as AutorunState === AutorunState.stale) {
+							// The other dependencies will refresh on demand
+							break;
+						}
+					}
 				}
 
 				this._runIfNeeded();
@@ -89,6 +96,12 @@ export class AutorunObserver implements IObserver, IReader, IDisposable {
 		} finally {
 		}
 
+	}
+
+	handlePossibleChange(observable: IObservable<any>): void {
+		if (this._state === AutorunState.upToDate && this._dependencies.has(observable) && !this._dependenciesToBeRemoved.has(observable)) {
+			this._state = AutorunState.dependenciesMightHaveChanged;
+		}
 	}
 
 	handleChange<T>(observable: IObservable<T>): void {

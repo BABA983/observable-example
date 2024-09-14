@@ -14,8 +14,21 @@ export interface IObservable<T> {
 
 	/**
 	 * Returns the current value.
+	 *
+	 * Calls {@link IObserver.handleChange} if the observable notices that the value changed.
+	 * Must not be called from {@link IObserver.handleChange}!
 	 */
 	get(): T;
+
+	/**
+	 * Forces the observable to check for changes and report them.
+	 *
+	 * Has the same effect as calling {@link IObservable.get}, but does not force the observable
+	 * to actually construct the value, e.g. if change deltas are used.
+	 * Calls {@link IObserver.handleChange} if the observable notices that the value changed.
+	 * Must not be called from {@link IObserver.handleChange}!
+	 */
+	reportChanges(): void;
 
 	/**
 	 * Adds the observer to the set of subscribed observers.
@@ -73,7 +86,19 @@ export interface IObserver {
 	endUpdate<T>(observable: IObservable<T>): void;
 
 	/**
+	 * Signals that the given observable might have changed.
+	 * The method {@link IObservable.reportChanges} can be used to force the observable to report the changes.
+	 *
+	 * Implementations must not get/read the value of other observables, as they might not have received this event yet!
+	 * The change should be processed lazily or in {@link IObserver.endUpdate}.
+	 */
+	handlePossibleChange<T>(observable: IObservable<T>): void;
+
+	/**
 	 * Signals that the given {@link observable} changed.
+	 *
+	 * Implementations must not get/read the value of other observables, as they might not have received this event yet!
+	 * The change should be processed lazily or in {@link IObserver.endUpdate}.
 	 *
 	 * @param observable
 	 */

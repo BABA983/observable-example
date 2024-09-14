@@ -44,8 +44,36 @@ export class Derived<T> extends BaseObservable<T> implements IReader, IObserver 
 	}
 
 	override get(): T {
+		do {
+			// We might not get a notification for a dependency that changed while it is updating,
+			// thus we also have to ask all our depedencies if they changed in this case.
+			if (this._state === DerivedState.dependenciesMightHaveChanged) {
+				for (const d of this._dependencies) {
+					/** might call {@link handleChange} indirectly, which could make us stale */
+					d.reportChanges();
+
+					if (this._state as DerivedState === DerivedState.stale) {
+						// The other dependencies will refresh on demand, so early break
+						break;
+					}
+				}
+			}
+
+			// We called report changes of all dependencies.
+			// If we are still not stale, we can assume to be up to date again.
+			if (this._state === DerivedState.dependenciesMightHaveChanged) {
+				this._state = DerivedState.upToDate;
+			}
+
+			this._recomputeIfNeeded();
+			// In case recomputation changed one of our dependencies, we need to recompute again.
+		} while (this._state !== DerivedState.upToDate);
+		return this._value!;
+	}
+
+	private _recomputeIfNeeded() {
 		if (this._state === DerivedState.upToDate) {
-			return this._value!;
+			return;
 		}
 
 		const emptySet = this._dependenciesToBeRemoved;
@@ -57,6 +85,7 @@ export class Derived<T> extends BaseObservable<T> implements IReader, IObserver 
 		this._state = DerivedState.upToDate;
 
 		try {
+			/** might call {@link handleChange} indirectly, which could invalidate us */
 			this._value = this._computeFn(this);
 		} finally {
 			// We don't want our observed observables to think that they are (not even temporarily) not being observed.
@@ -75,22 +104,30 @@ export class Derived<T> extends BaseObservable<T> implements IReader, IObserver 
 			hadValue,
 		});
 		if (didChange) {
+			// if change we notify observers they are stale
 			for (const r of this.observers) {
 				r.handleChange(this);
 			}
 		}
-		return this._value;
+	}
+
+	public override toString(): string {
+		return `LazyDerived<${this.debugName}>`;
 	}
 
 	beginUpdate<T>(_observable: IObservable<T>): void {
 		if (this._state === DerivedState.upToDate) {
 			this._state = DerivedState.dependenciesMightHaveChanged;
-
+			for (const r of this.observers) {
+				r.handlePossibleChange(this);
+			}
 		}
 		for (const r of this.observers) {
 			r.beginUpdate(this);
 		}
 	}
+
+
 
 	endUpdate<T>(_observable: IObservable<T>): void {
 		for (const r of this.observers) {
@@ -98,12 +135,25 @@ export class Derived<T> extends BaseObservable<T> implements IReader, IObserver 
 		}
 	}
 
+	handlePossibleChange<T>(observable: IObservable<T>): void {
+		// In all other states, observers already know that we might have changed.
+		if (this._state === DerivedState.upToDate && this._dependencies.has(observable) && !this._dependenciesToBeRemoved.has(observable)) {
+			this._state = DerivedState.dependenciesMightHaveChanged;
+			for (const r of this.observers) {
+				r.handlePossibleChange(this);
+			}
+		}
+	}
+
 	handleChange<T>(observable: IObservable<T>): void {
 		if (this._dependencies.has(observable)) {
-			if (this._state === DerivedState.dependenciesMightHaveChanged || this._state === DerivedState.upToDate) {
+			const wasUpToDate = this._state === DerivedState.upToDate;
+			if (this._state === DerivedState.dependenciesMightHaveChanged || wasUpToDate) {
 				this._state = DerivedState.stale;
-				for (const r of this.observers) {
-					r.handleChange(this);
+				if (wasUpToDate) {
+					for (const r of this.observers) {
+						r.handlePossibleChange(this);
+					}
 				}
 			}
 		}
@@ -119,7 +169,6 @@ export class Derived<T> extends BaseObservable<T> implements IReader, IObserver 
 		this._dependenciesToBeRemoved.delete(observable);
 		return value;
 	}
-
 }
 
 /**
